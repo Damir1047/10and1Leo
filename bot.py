@@ -2,6 +2,7 @@ import csv
 import json
 import asyncio
 import websockets
+from plyer import notification
 import chime
 from datetime import datetime, timedelta
 
@@ -15,10 +16,11 @@ async def start():
         await connect_to_tickers_candles(websocket, name_ticker_dict, tf=60, start_timestamp=start_timestamp)
         async for message in websocket:
             data = (json.loads(message))
-            # print(data)
+            #print(data, flush=False)
             if 'data' in data:
                 name = Ticker.guid_name_dict[data['guid']]
-
+                #print(name)
+                #print(name_ticker_dict[name])
                 ticker = name_ticker_dict[name]
                 data = data['data']
                 candle_time = data['time']
@@ -32,14 +34,19 @@ async def start():
                 perc_to_round = (ticker.round_price - c) / ticker.round_price * 100
                 #print (c)
                 if not ticker.close_to_round_price and c < ticker.round_price and perc_to_round <= Ticker.close_min_percent:
-                    print(f'{date} --- {ticker.name}: curr_price: {c} round_price: {ticker.round_price} (до круглой цены осталось {round(perc_to_round, 2)})')
+                    print(f'{date} - {ticker.name}: at: {c} -->>: {ticker.round_price} (до круглой цены осталось {round(perc_to_round, 2)})')
                     chime.theme('mario')
                     chime.success(sync=True)
+                    notification.notify(
+                        title = f'{ticker.name}   at   {c}',
+                        message = f'{ticker.name}: at: {c} -->>: {ticker.round_price}  {round(perc_to_round, 2)})',
+                        timeout = 2
+                    )
                     ticker.close_to_round_price = True
                 
                 # круглая цена
                 if not ticker.reached_round_price and c == ticker.round_price:
-                    print(f'{date} --- {ticker.name}: curr_price: {c} round_price: {ticker.round_price} (дошли до круглой цены)')
+                    print(f'{date} - {ticker.name}: at: {c} -->>: {ticker.round_price} (дошли до круглой цены)')
                     ticker.reached_round_price = True
                 
                 # пробой круглой цены
@@ -50,7 +57,14 @@ async def start():
                         # print(f'***** {ticker.name} curr: {c}; обновили максимальную цену с {ticker.round_price} до {nearest_round_number}')
                         ticker.round_price = nearest_round_number
                     else:
-                        print(f'{date} --- {ticker.name}: curr_price: {c} round_price: {ticker.round_price} (ПРОБИЛИ КРУГЛУЮ ЦЕНУ!!)')
+                        thetext = (f'{date} ----------------------------------- {ticker.name}: at: {c} -->>>>>: {ticker.round_price} (ПРОБИЛИ КРУГЛУЮ ЦЕНУ!!)')
+                        print(thetext)
+                        notification.notify(
+                            title=f'{ticker.name}   at   {c}',
+                            message=f'{ticker.name}: at: {c} -->>>>>: {ticker.round_price} (ПРОБИЛИ КРУГЛУЮ ЦЕНУ!!)',
+                            timeout=2
+                        )
+                        #notification.notify(message=thetext, app_name='BOT', title=f'{ticker.name}')
                         chime.theme('mario')
                         chime.warning(sync=True)
                         ticker.broke_the_round_price = True
@@ -70,9 +84,11 @@ with open(Ticker.max_prices_path) as f:
         name = row[0]
         highest_price = float(row[1])
         round_price = float(row[2])
-        print(float(row[2]))
-        print(row[0])
+        #print(float(row[2]))
+        #print(row[0])
+
         ticker = Ticker(name, highest_price, round_price)
+        print(ticker)
         name_ticker_dict[name] = ticker
 
 asyncio.get_event_loop().run_until_complete(start())
